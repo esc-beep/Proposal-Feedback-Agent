@@ -8,6 +8,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
+from database_config import resolve_database_url
 from document_parser import DocumentParseError
 from feedback_evaluator import FeedbackEvaluator
 from feedback_renderer import FeedbackRenderer, safe_feedback_filename

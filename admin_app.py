@@ -6,17 +6,16 @@ from typing import Any
 import streamlit as st
 from dotenv import load_dotenv
 
+from database_config import resolve_database_url
 from feedback_storage import FeedbackRunStore
 
 
-DEFAULT_DATABASE_URL = "sqlite:///feedback_runs.db"
 ITEM_SCORE_LABELS = [
-    ("워크플로우_정상_작동", "워크플로우 정상 작동"),
+    ("기획서_실용성", "기획서 실용성"),
+    ("문제해결_창의성", "문제해결/창의성"),
     ("Upstage_활용", "Upstage 활용"),
-    ("실제_적용_가능성", "실제 적용 가능성"),
-    ("자동화_효과", "자동화 효과"),
-    ("문제_정의_독창성", "문제 정의 독창성"),
-    ("솔루션_참신함", "솔루션 참신함"),
+    ("워크플로우_정상_작동", "기술적 완성도"),
+    ("기획_워크플로우_매핑", "기획-워크플로우 매핑"),
 ]
 
 load_dotenv()
@@ -32,7 +31,7 @@ class FeedbackStorageError(RuntimeError):
 
 
 def create_feedback_store() -> FeedbackRunStore:
-    return FeedbackRunStore(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL))
+    return FeedbackRunStore(resolve_database_url())
 
 
 def fetch_admin_submissions(store: FeedbackRunStore | None = None) -> dict[str, Any]:
@@ -89,9 +88,7 @@ def _render_admin_page() -> None:
         st.error(str(exc))
         return
 
-    col1, col2 = st.columns(2)
-    col1.metric("전체 응답 수", payload.get("total_count", 0))
-    col2.metric("응답 팀 수", payload.get("team_count", 0))
+    _render_count_summary(payload.get("total_count", 0), payload.get("team_count", 0))
 
     rows = format_admin_table_rows(payload.get("submissions", []))
     if not rows:
@@ -132,14 +129,21 @@ def format_admin_table_rows(submissions: list[dict[str, Any]]) -> list[dict[str,
     return rows
 
 
+def _render_count_summary(total_count: int, team_count: int) -> None:
+    col1, col2 = st.columns(2)
+    col1.markdown(f"**전체 응답 수**  \n{total_count}")
+    col2.markdown(f"**응답 팀 수**  \n{team_count}")
+
+
 def _render_admin_table(rows: list[dict[str, Any]]) -> None:
-    header = st.columns([1.5, 1.3, 0.7, 1.0, 1, 1, 1, 1, 1, 1])
+    column_weights = [1.5, 1.3, 0.7, 1.0] + [1] * len(ITEM_SCORE_LABELS)
+    header = st.columns(column_weights)
     labels = ["제출일시", "팀명", "모드", "최종 점수"] + [label for _, label in ITEM_SCORE_LABELS]
     for column, label in zip(header, labels):
         column.markdown(f"**{label}**")
 
     for row in rows:
-        columns = st.columns([1.5, 1.3, 0.7, 1.0, 1, 1, 1, 1, 1, 1])
+        columns = st.columns(column_weights)
         columns[0].write(row["제출일시"])
         if columns[1].button(str(row["팀명"]), key=f"submission_{row['id']}"):
             st.session_state.selected_admin_submission_id = row["id"]

@@ -17,7 +17,6 @@ from workflow_input_loader import WorkflowInputError
 
 
 MAX_RUNS_PER_SESSION = 5
-DEFAULT_DATABASE_URL = "sqlite:///feedback_runs.db"
 
 load_dotenv()
 
@@ -40,13 +39,13 @@ def _render_feedback_page() -> None:
         workflow_file = st.file_uploader(
             "n8n 워크플로우 JSON 또는 ZIP (선택)",
             type=["json", "zip"],
-            help="업로드하지 않으면 기획서 60점 만점 평가만 진행합니다.",
+            help="업로드하지 않으면 기획서 40점 만점 평가만 진행합니다.",
         )
 
         confirm_plan_only = True
         if plan_pdf is not None and workflow_file is None:
             st.warning("기획서만 넣으면 기획안에 대한 평가만 진행돼요.")
-            confirm_plan_only = st.checkbox("네, 기획서만 60점 만점으로 평가할게요.")
+            confirm_plan_only = st.checkbox("네, 기획서만 40점 만점으로 평가할게요.")
 
         submitted = st.form_submit_button(
             "피드백 생성",
@@ -142,7 +141,7 @@ class FeedbackStorageError(RuntimeError):
 
 
 def create_feedback_store() -> FeedbackRunStore:
-    return FeedbackRunStore(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL))
+    return FeedbackRunStore(resolve_database_url())
 
 
 def submit_feedback_run(

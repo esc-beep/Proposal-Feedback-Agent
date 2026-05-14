@@ -59,6 +59,18 @@ class FeedbackEvaluator:
     def _data_for_item(self, item: CriteriaItem, document_text: str, workflows: List[Dict[str, Any]]) -> str:
         if item.input == "document":
             return document_text
+        if item.input == "combined":
+            return json.dumps(
+                {
+                    "기획서_본문": document_text,
+                    "워크플로우들": [
+                        {"파일명": workflow["name"], "워크플로우_JSON": workflow["data"]}
+                        for workflow in workflows
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
         return json.dumps(
             [{"파일명": workflow["name"], "워크플로우_JSON": workflow["data"]} for workflow in workflows],
             ensure_ascii=False,

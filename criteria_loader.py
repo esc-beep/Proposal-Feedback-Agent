@@ -54,58 +54,63 @@ def _scale_rubric(rubric: str, source_score: int, target_score: int) -> str:
 
 DEFAULT_CRITERIA = [
     CriteriaItem(
-        key="워크플로우_정상_작동",
-        name="워크플로우 정상 작동 여부",
-        category="기술적 완성도",
-        max_score=20,
-        input="workflow",
-        rubric=_scale_rubric(TECHNICAL_CRITERIA, 15, 20),
-        multi_rubric=_scale_rubric(MULTI_WORKFLOW_TECHNICAL_CRITERIA, 15, 20),
-    ),
-    CriteriaItem(
-        key="Upstage_활용",
-        name="Upstage 서비스 활용 수준",
-        category="기술적 완성도",
-        max_score=20,
-        input="workflow",
-        rubric=_scale_rubric(UPSTAGE_CRITERIA, 15, 20),
-        multi_rubric=_scale_rubric(MULTI_WORKFLOW_UPSTAGE_CRITERIA, 15, 20),
-    ),
-    CriteriaItem(
-        key="실제_적용_가능성",
-        name="실제 적용 가능성",
-        category="실용성·비즈니스",
+        key="기획서_실용성",
+        name="실용성",
+        category="기획서 평가",
         max_score=20,
         input="document",
         rubric=PRACTICALITY_CRITERIA
         + "\n\n위 기획서 본문에서 실제 사용 시나리오, 반복 업무 제거, 적용 가능성을 중심으로 20점 만점으로 평가하세요.",
     ),
     CriteriaItem(
-        key="자동화_효과",
-        name="자동화 효과 및 사용자 편의성",
-        category="실용성·비즈니스",
-        max_score=10,
-        input="document",
-        rubric=PRACTICALITY_CRITERIA
-        + "\n\n위 기획서 본문에서 자동화 효과, 사용 편의성, 재사용 가능성을 중심으로 10점 만점으로 평가하세요.",
-    ),
-    CriteriaItem(
-        key="문제_정의_독창성",
-        name="문제 정의의 독창성",
-        category="창의성·문제 해결 접근법",
-        max_score=15,
+        key="문제해결_창의성",
+        name="문제 해결 접근법 및 창의성 평가",
+        category="기획서 평가",
+        max_score=20,
         input="document",
         rubric=PROBLEM_SOLVING_CRITERIA
-        + "\n\n위 기획서 본문에서 문제 정의의 구체성, 차별화된 관점, 독창성을 중심으로 15점 만점으로 평가하세요.",
+        + "\n\n위 기획서 본문에서 문제 정의의 구체성, 차별화된 관점, 솔루션 구성의 참신함을 종합해 20점 만점으로 평가하세요.",
     ),
     CriteriaItem(
-        key="솔루션_참신함",
-        name="솔루션 구성의 참신함",
-        category="창의성·문제 해결 접근법",
+        key="워크플로우_정상_작동",
+        name="기술적 완성도",
+        category="워크플로우 평가",
+        max_score=25,
+        input="workflow",
+        rubric=_scale_rubric(TECHNICAL_CRITERIA, 15, 25),
+        multi_rubric=_scale_rubric(MULTI_WORKFLOW_TECHNICAL_CRITERIA, 15, 25),
+    ),
+    CriteriaItem(
+        key="Upstage_활용",
+        name="업스테이지 제품 활용도",
+        category="워크플로우 평가",
         max_score=15,
-        input="document",
-        rubric=PROBLEM_SOLVING_CRITERIA
-        + "\n\n위 기획서 본문에서 솔루션 구성의 차별성, 전략적 조합, 창의적 해결 방식을 중심으로 15점 만점으로 평가하세요.",
+        input="workflow",
+        rubric=UPSTAGE_CRITERIA
+        + "\n\n이 항목의 최종 점수는 반드시 0점부터 15점 사이의 정수로 산정하세요.",
+        multi_rubric=MULTI_WORKFLOW_UPSTAGE_CRITERIA
+        + "\n\n이 항목의 최종 점수는 반드시 0점부터 15점 사이의 정수로 산정하세요.",
+    ),
+    CriteriaItem(
+        key="기획_워크플로우_매핑",
+        name="기획서 ↔ 워크플로우 매핑 정도",
+        category="기획서 ↔ 워크플로우 매핑 정도",
+        max_score=20,
+        input="combined",
+        rubric="""
+# 기획서 ↔ 워크플로우 매핑 정도 평가 기준 (20점)
+
+기획서에 적힌 문제, 사용자 시나리오, 핵심 기능, 자동화 흐름이 실제 n8n 워크플로우 JSON에 얼마나 충실하게 구현되어 있는지 평가하세요.
+
+## 평가 관점
+- 기획서의 핵심 사용자 문제와 워크플로우의 실제 동작 목적이 일치하는가?
+- 기획서에서 약속한 입력, 처리 단계, 출력 또는 사용자 경험이 워크플로우에 반영되어 있는가?
+- 기획서에는 중요한 기능으로 적혀 있지만 워크플로우에 빠진 부분이 있는가?
+- 워크플로우에 구현된 기능이 기획 의도와 무관하게 벗어나 있거나 과도하지 않은가?
+- 구현 범위가 기획된 방향을 검증 가능한 형태로 잘 보여주는가?
+
+반드시 0점부터 20점 사이의 정수 점수와 함께 강점, 약점, 개선 제안을 JSON으로 작성하세요.
+""",
     ),
 ]
 

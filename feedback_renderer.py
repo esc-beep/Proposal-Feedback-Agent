@@ -25,20 +25,19 @@ class FeedbackRenderer:
             "",
         ]
 
-        if mode == "B":
-            lines.extend(self._render_category(result, "기술적 완성도", [
-                ("워크플로우_정상_작동", "워크플로우 정상 작동 여부"),
-                ("Upstage_활용", "Upstage 서비스 활용 수준"),
-            ]))
+        lines.extend(self._render_category(result, "기획서 평가", [
+            ("기획서_실용성", "실용성"),
+            ("문제해결_창의성", "문제 해결 접근법 및 창의성 평가"),
+        ]))
 
-        lines.extend(self._render_category(result, "실용성·비즈니스 임팩트", [
-            ("실제_적용_가능성", "실제 적용 가능성"),
-            ("자동화_효과", "자동화 효과 및 사용자 편의성"),
-        ]))
-        lines.extend(self._render_category(result, "창의성·문제 해결 접근법", [
-            ("문제_정의_독창성", "문제 정의의 독창성"),
-            ("솔루션_참신함", "솔루션 구성의 참신함"),
-        ]))
+        if mode == "B":
+            lines.extend(self._render_category(result, "워크플로우 평가", [
+                ("Upstage_활용", "업스테이지 제품 활용도"),
+                ("워크플로우_정상_작동", "기술적 완성도"),
+            ]))
+            lines.extend(self._render_category(result, "기획서 ↔ 워크플로우 매핑 정도", [
+                ("기획_워크플로우_매핑", "기획된 방향대로 워크플로우를 잘 제작하였는가?"),
+            ]))
 
         lines.extend(["## 다음 액션 아이템"])
         actions = result.get("다음_액션_아이템") or []
@@ -46,7 +45,7 @@ class FeedbackRenderer:
             lines.append(f"{index}. {action}")
 
         if mode == "A":
-            footer = "_이 피드백은 기획서만 보고 작성되었어요. n8n 워크플로우를 만든 뒤 다시 돌리면 전체 평가를 받을 수 있어요._"
+            footer = "_이 피드백은 기획서만 보고 40점 만점으로 작성되었어요. n8n 워크플로우를 만든 뒤 다시 돌리면 100점 만점 전체 평가를 받을 수 있어요._"
         else:
             footer = "_이 피드백은 자동 생성되었어요. 궁금한 점은 행사 멘토에게 문의해주세요._"
         lines.extend(["", "---", footer])

@@ -32,11 +32,7 @@ class FeedbackStorageError(RuntimeError):
 
 
 def create_feedback_store() -> FeedbackRunStore:
-<<<<<<< HEAD
     return FeedbackRunStore(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL))
-=======
-    return FeedbackRunStore(resolve_database_url())
->>>>>>> 7caf152 (fix: 관리자 페이지 통계 수정)
 
 
 def fetch_admin_submissions(store: FeedbackRunStore | None = None) -> dict[str, Any]:

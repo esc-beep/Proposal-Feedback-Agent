@@ -4,14 +4,19 @@ import html
 import os
 from typing import Any
 
-import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
+from document_parser import DocumentParseError
+from feedback_evaluator import FeedbackEvaluator
+from feedback_renderer import FeedbackRenderer, safe_feedback_filename
+from feedback_storage import FeedbackRunStore
+from workflow_input_loader import WorkflowInputError
+
 
 MAX_RUNS_PER_SESSION = 5
-DEFAULT_BACKEND_API_URL = "http://localhost:8000"
+DEFAULT_DATABASE_URL = "sqlite:///feedback_runs.db"
 
 load_dotenv()
 
@@ -73,11 +78,13 @@ def _init_state() -> None:
 def _render_env_status() -> None:
     missing = [
         name
-        for name in ("BACKEND_API_URL",)
+        for name in ("OPENROUTER_API_KEY", "UPSTAGE_API_KEY")
         if not os.getenv(name)
     ]
     if missing:
-        st.info(f"환경변수 미설정 시 기본값을 사용합니다: {', '.join(missing)}")
+        st.info(f"환경변수 설정 필요: {', '.join(missing)}")
+    if not os.getenv("DATABASE_URL"):
+        st.info("DATABASE_URL 미설정 시 로컬 SQLite 파일에 저장합니다.")
 
 
 def validate_submission(team_name, plan_pdf, workflow_file, confirm_plan_only: bool, run_count: int) -> list[str]:
@@ -102,7 +109,7 @@ def _run_feedback(team_name, plan_pdf, workflow_file) -> None:
     status = st.empty()
 
     try:
-        status.text("백엔드로 파일을 전송하고 있어요...")
+        status.text("PDF를 파싱하고 있어요...")
         progress.progress(20)
 
         status.text("AI가 항목별 피드백을 작성하고 있어요...")
@@ -120,7 +127,7 @@ def _run_feedback(team_name, plan_pdf, workflow_file) -> None:
 
         progress.progress(100)
         status.text("피드백 리포트가 생성되었어요.")
-    except BackendAPIError as exc:
+    except (DocumentParseError, WorkflowInputError, ValueError, FeedbackStorageError) as exc:
         st.error(str(exc))
     except Exception as exc:
         st.error(f"피드백 생성 중 예상하지 못한 오류가 발생했어요: {exc}")
@@ -129,57 +136,40 @@ def _run_feedback(team_name, plan_pdf, workflow_file) -> None:
         status.empty()
 
 
-class BackendAPIError(RuntimeError):
-    """Raised when the Streamlit UI cannot complete a backend request."""
+class FeedbackStorageError(RuntimeError):
+    """Raised when feedback cannot be saved after evaluation."""
 
 
-def backend_api_url() -> str:
-    return os.getenv("BACKEND_API_URL", DEFAULT_BACKEND_API_URL).rstrip("/")
+def create_feedback_store() -> FeedbackRunStore:
+    return FeedbackRunStore(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL))
 
 
-def api_headers() -> dict[str, str]:
-    token = os.getenv("API_SHARED_TOKEN", "")
-    return {"Authorization": f"Bearer {token}"} if token else {}
+def submit_feedback_run(
+    team_name,
+    plan_pdf,
+    workflow_file,
+    evaluator: FeedbackEvaluator | None = None,
+    store: FeedbackRunStore | None = None,
+) -> dict[str, Any]:
+    feedback_json = (evaluator or FeedbackEvaluator()).evaluate(team_name, plan_pdf, workflow_file)
+    markdown = FeedbackRenderer().render(feedback_json)
+    feedback_store = store or create_feedback_store()
+    should_close = store is None
+    try:
+        feedback_store.initialize()
+        run_id = feedback_store.save_feedback_result(feedback_json, markdown)
+    except Exception as exc:
+        raise FeedbackStorageError(f"피드백 저장 중 오류가 발생했어요: {exc}") from exc
+    finally:
+        if should_close:
+            feedback_store.close()
 
-
-def submit_feedback_run(team_name, plan_pdf, workflow_file) -> dict[str, Any]:
-    files = {
-        "plan_pdf": (
-            getattr(plan_pdf, "name", "plan.pdf"),
-            plan_pdf.getvalue(),
-            "application/pdf",
-        )
+    return {
+        "id": run_id,
+        "feedback_json": feedback_json,
+        "feedback_markdown": markdown,
+        "feedback_filename": safe_feedback_filename(team_name),
     }
-    if workflow_file is not None:
-        filename = getattr(workflow_file, "name", "workflow.json")
-        content_type = "application/zip" if filename.lower().endswith(".zip") else "application/json"
-        files["workflow_file"] = (filename, workflow_file.getvalue(), content_type)
-
-    try:
-        response = requests.post(
-            f"{backend_api_url()}/feedback-runs",
-            data={"team_name": team_name},
-            files=files,
-            headers=api_headers(),
-            timeout=300,
-        )
-    except requests.RequestException as exc:
-        raise BackendAPIError(f"백엔드 API에 연결하지 못했어요: {exc}") from exc
-
-    return _json_or_error(response)
-
-
-def _json_or_error(response: requests.Response) -> dict[str, Any]:
-    if response.ok:
-        return response.json()
-
-    message = response.text
-    try:
-        payload = response.json()
-        message = payload.get("detail", message)
-    except ValueError:
-        pass
-    raise BackendAPIError(str(message))
 
 
 def _render_result() -> None:

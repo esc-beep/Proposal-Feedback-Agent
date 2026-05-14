@@ -15,42 +15,34 @@
 ```bash
 pip install -r requirements.txt
 
-# 터미널 1: API
-uvicorn api_app:app --reload
-
-# 터미널 2: Streamlit
+# 터미널 1: 참가자 Streamlit
 streamlit run app.py
 
-# 터미널 3: 관리자 Streamlit
+# 터미널 2: 관리자 Streamlit
 streamlit run admin_app.py --server.port=8502
 ```
 
 ## 환경 변수
 
 - `DATABASE_URL`: Railway Postgres 연결 문자열
-- `OPENROUTER_API_KEY`: OpenRouter `openai/gpt-4o` 호출용. API 서비스에 설정합니다.
-- `UPSTAGE_API_KEY`: Upstage Document Parse 호출용. API 서비스에 설정합니다.
-- `BACKEND_API_URL`: Streamlit 웹 서비스가 호출할 FastAPI 주소. 로컬 기본값은 `http://localhost:8000`입니다.
-- `API_SHARED_TOKEN`: Streamlit 웹 서비스와 FastAPI 서비스 사이의 Bearer 토큰
+- `OPENROUTER_API_KEY`: OpenRouter `openai/gpt-4o` 호출용. 참가자 `web` 서비스에 설정합니다.
+- `UPSTAGE_API_KEY`: Upstage Document Parse 호출용. 참가자 `web` 서비스에 설정합니다.
 - `ADMIN_PASSWORD`: Streamlit 관리자 페이지 비밀번호
 - `CRITERIA_CONFIG_PATH`: 선택. 행사별 rubric JSON 경로
 
 ## Railway
 
-Railway에서는 같은 저장소로 서비스 3개를 구성합니다.
+Railway에서는 같은 저장소로 앱 서비스 2개와 Postgres 1개를 구성합니다.
 
 ```bash
 web: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
 admin: streamlit run admin_app.py --server.port=$PORT --server.address=0.0.0.0
-api: uvicorn api_app:app --host 0.0.0.0 --port=$PORT
 ```
 
-- `web` 서비스는 Streamlit 앱입니다.
+- `web` 서비스는 참가자 피드백 생성 Streamlit 앱입니다.
 - `admin` 서비스는 관리자 전용 Streamlit 앱입니다.
-- `api` 서비스는 평가 실행, DB 저장, 관리자 조회 API를 담당합니다.
 - 두 서비스는 같은 Railway Postgres의 `DATABASE_URL`을 공유합니다.
-- `web`/`admin` 서비스의 `BACKEND_API_URL`은 Railway private networking 주소를 우선 사용합니다.
-- Streamlit 헬스체크 경로는 `/_stcore/health`, FastAPI 헬스체크 경로는 `/health`를 사용합니다.
+- Streamlit 헬스체크 경로는 두 서비스 모두 `/_stcore/health`를 사용합니다.
 
 ## 관리자 페이지
 
@@ -62,7 +54,6 @@ api: uvicorn api_app:app --host 0.0.0.0 --port=$PORT
 
 - `app.py`: 단일 페이지 Streamlit UI
 - `admin_app.py`: 관리자 전용 Streamlit UI
-- `api_app.py`: FastAPI 백엔드
 - `feedback_storage.py`: 평가 결과 저장/조회
 - `feedback_evaluator.py`: 입력 검증, PDF 파싱, 워크플로우 로딩, LLM 평가 orchestration
 - `document_parser.py`: Upstage Document Parse 연동

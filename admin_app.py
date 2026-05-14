@@ -3,12 +3,13 @@
 import os
 from typing import Any
 
-import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+from feedback_storage import FeedbackRunStore
 
-DEFAULT_BACKEND_API_URL = "http://localhost:8000"
+
+DEFAULT_DATABASE_URL = "sqlite:///feedback_runs.db"
 ITEM_SCORE_LABELS = [
     ("워크플로우_정상_작동", "워크플로우 정상 작동"),
     ("Upstage_활용", "Upstage 활용"),
@@ -26,54 +27,47 @@ def main() -> None:
     _render_admin_page()
 
 
-class BackendAPIError(RuntimeError):
-    """Raised when the admin UI cannot complete a backend request."""
+class FeedbackStorageError(RuntimeError):
+    """Raised when the admin UI cannot read stored feedback."""
 
 
-def backend_api_url() -> str:
-    return os.getenv("BACKEND_API_URL", DEFAULT_BACKEND_API_URL).rstrip("/")
+def create_feedback_store() -> FeedbackRunStore:
+    return FeedbackRunStore(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL))
 
 
-def api_headers() -> dict[str, str]:
-    token = os.getenv("API_SHARED_TOKEN", "")
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
-
-def fetch_admin_submissions() -> dict[str, Any]:
+def fetch_admin_submissions(store: FeedbackRunStore | None = None) -> dict[str, Any]:
+    feedback_store = store or create_feedback_store()
+    should_close = store is None
     try:
-        response = requests.get(
-            f"{backend_api_url()}/admin/submissions",
-            headers=api_headers(),
-            timeout=30,
-        )
-    except requests.RequestException as exc:
-        raise BackendAPIError(f"관리자 목록을 불러오지 못했어요: {exc}") from exc
-    return _json_or_error(response)
+        feedback_store.initialize()
+        submissions = feedback_store.list_submissions()
+        return {
+            "total_count": len(submissions),
+            "team_count": len({submission["team_name"] for submission in submissions}),
+            "submissions": submissions,
+        }
+    except Exception as exc:
+        raise FeedbackStorageError(f"관리자 목록을 불러오지 못했어요: {exc}") from exc
+    finally:
+        if should_close:
+            feedback_store.close()
 
 
-def fetch_admin_submission(run_id: int) -> dict[str, Any]:
+def fetch_admin_submission(run_id: int, store: FeedbackRunStore | None = None) -> dict[str, Any]:
+    feedback_store = store or create_feedback_store()
+    should_close = store is None
     try:
-        response = requests.get(
-            f"{backend_api_url()}/admin/submissions/{run_id}",
-            headers=api_headers(),
-            timeout=30,
-        )
-    except requests.RequestException as exc:
-        raise BackendAPIError(f"상세 피드백을 불러오지 못했어요: {exc}") from exc
-    return _json_or_error(response)
+        feedback_store.initialize()
+        submission = feedback_store.get_submission(run_id)
+    except Exception as exc:
+        raise FeedbackStorageError(f"상세 피드백을 불러오지 못했어요: {exc}") from exc
+    finally:
+        if should_close:
+            feedback_store.close()
 
-
-def _json_or_error(response: requests.Response) -> dict[str, Any]:
-    if response.ok:
-        return response.json()
-
-    message = response.text
-    try:
-        payload = response.json()
-        message = payload.get("detail", message)
-    except ValueError:
-        pass
-    raise BackendAPIError(str(message))
+    if submission is None:
+        raise FeedbackStorageError("응답을 찾을 수 없습니다.")
+    return submission
 
 
 def _render_admin_page() -> None:
@@ -91,7 +85,7 @@ def _render_admin_page() -> None:
 
     try:
         payload = fetch_admin_submissions()
-    except BackendAPIError as exc:
+    except FeedbackStorageError as exc:
         st.error(str(exc))
         return
 
@@ -111,7 +105,7 @@ def _render_admin_page() -> None:
     if selected_id:
         try:
             detail = fetch_admin_submission(int(selected_id))
-        except BackendAPIError as exc:
+        except FeedbackStorageError as exc:
             st.error(str(exc))
             return
         _render_admin_detail(detail)

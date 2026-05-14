@@ -2,18 +2,16 @@
 
 import html
 import os
+from typing import Any
 
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
-from document_parser import DocumentParseError
-from feedback_evaluator import FeedbackEvaluator
-from feedback_renderer import FeedbackRenderer, safe_feedback_filename
-from workflow_input_loader import WorkflowInputError
-
 
 MAX_RUNS_PER_SESSION = 5
+DEFAULT_BACKEND_API_URL = "http://localhost:8000"
 
 load_dotenv()
 
@@ -21,7 +19,10 @@ load_dotenv()
 def main() -> None:
     st.set_page_config(page_title="피드백 Agent", page_icon="📝", layout="wide")
     _init_state()
+    _render_feedback_page()
 
+
+def _render_feedback_page() -> None:
     st.title("피드백 Agent")
     st.caption("기획서 PDF와 n8n 워크플로우를 바탕으로 개인 피드백 리포트를 생성합니다.")
 
@@ -72,11 +73,11 @@ def _init_state() -> None:
 def _render_env_status() -> None:
     missing = [
         name
-        for name in ("OPENROUTER_API_KEY", "UPSTAGE_API_KEY")
+        for name in ("BACKEND_API_URL",)
         if not os.getenv(name)
     ]
     if missing:
-        st.info(f"환경변수 설정 필요: {', '.join(missing)}")
+        st.info(f"환경변수 미설정 시 기본값을 사용합니다: {', '.join(missing)}")
 
 
 def validate_submission(team_name, plan_pdf, workflow_file, confirm_plan_only: bool, run_count: int) -> list[str]:
@@ -101,31 +102,84 @@ def _run_feedback(team_name, plan_pdf, workflow_file) -> None:
     status = st.empty()
 
     try:
-        status.text("PDF를 파싱하고 있어요...")
+        status.text("백엔드로 파일을 전송하고 있어요...")
         progress.progress(20)
 
-        evaluator = FeedbackEvaluator()
         status.text("AI가 항목별 피드백을 작성하고 있어요...")
         progress.progress(45)
 
-        feedback_json = evaluator.evaluate(team_name, plan_pdf, workflow_file)
+        payload = submit_feedback_run(team_name, plan_pdf, workflow_file)
+        feedback_json = payload["feedback_json"]
+        markdown = payload["feedback_markdown"]
         progress.progress(85)
 
-        markdown = FeedbackRenderer().render(feedback_json)
         st.session_state.feedback_json = feedback_json
         st.session_state.feedback_markdown = markdown
-        st.session_state.feedback_filename = safe_feedback_filename(team_name)
+        st.session_state.feedback_filename = payload["feedback_filename"]
         st.session_state.run_count += 1
 
         progress.progress(100)
         status.text("피드백 리포트가 생성되었어요.")
-    except (DocumentParseError, WorkflowInputError, ValueError) as exc:
+    except BackendAPIError as exc:
         st.error(str(exc))
     except Exception as exc:
         st.error(f"피드백 생성 중 예상하지 못한 오류가 발생했어요: {exc}")
     finally:
         progress.empty()
         status.empty()
+
+
+class BackendAPIError(RuntimeError):
+    """Raised when the Streamlit UI cannot complete a backend request."""
+
+
+def backend_api_url() -> str:
+    return os.getenv("BACKEND_API_URL", DEFAULT_BACKEND_API_URL).rstrip("/")
+
+
+def api_headers() -> dict[str, str]:
+    token = os.getenv("API_SHARED_TOKEN", "")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def submit_feedback_run(team_name, plan_pdf, workflow_file) -> dict[str, Any]:
+    files = {
+        "plan_pdf": (
+            getattr(plan_pdf, "name", "plan.pdf"),
+            plan_pdf.getvalue(),
+            "application/pdf",
+        )
+    }
+    if workflow_file is not None:
+        filename = getattr(workflow_file, "name", "workflow.json")
+        content_type = "application/zip" if filename.lower().endswith(".zip") else "application/json"
+        files["workflow_file"] = (filename, workflow_file.getvalue(), content_type)
+
+    try:
+        response = requests.post(
+            f"{backend_api_url()}/feedback-runs",
+            data={"team_name": team_name},
+            files=files,
+            headers=api_headers(),
+            timeout=300,
+        )
+    except requests.RequestException as exc:
+        raise BackendAPIError(f"백엔드 API에 연결하지 못했어요: {exc}") from exc
+
+    return _json_or_error(response)
+
+
+def _json_or_error(response: requests.Response) -> dict[str, Any]:
+    if response.ok:
+        return response.json()
+
+    message = response.text
+    try:
+        payload = response.json()
+        message = payload.get("detail", message)
+    except ValueError:
+        pass
+    raise BackendAPIError(str(message))
 
 
 def _render_result() -> None:

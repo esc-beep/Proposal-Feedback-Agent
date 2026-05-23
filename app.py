@@ -17,6 +17,7 @@ from workflow_input_loader import WorkflowInputError
 
 
 MAX_RUNS_PER_SESSION = 5
+MAX_PDF_SIZE = 20 * 1024 * 1024
 
 load_dotenv()
 
@@ -39,13 +40,13 @@ def _render_feedback_page() -> None:
         workflow_file = st.file_uploader(
             "n8n 워크플로우 JSON 또는 ZIP (선택)",
             type=["json", "zip"],
-            help="업로드하지 않으면 기획서 40점 만점 평가만 진행합니다.",
+            help="업로드하지 않으면 기획서 60점 만점 평가만 진행합니다.",
         )
 
         confirm_plan_only = True
         if plan_pdf is not None and workflow_file is None:
             st.warning("기획서만 넣으면 기획안에 대한 평가만 진행돼요.")
-            confirm_plan_only = st.checkbox("네, 기획서만 40점 만점으로 평가할게요.")
+            confirm_plan_only = st.checkbox("네, 기획서만 60점 만점으로 평가할게요.")
 
         submitted = st.form_submit_button(
             "피드백 생성",
@@ -95,6 +96,8 @@ def validate_submission(team_name, plan_pdf, workflow_file, confirm_plan_only: b
         errors.append("팀명을 입력해주세요.")
     if plan_pdf is None:
         errors.append("기획서 PDF를 업로드해주세요.")
+    if plan_pdf is not None and getattr(plan_pdf, "size", 0) > MAX_PDF_SIZE:
+        errors.append("기획서 PDF는 20MB 이하만 업로드할 수 있어요.")
     if plan_pdf is not None and workflow_file is None and not confirm_plan_only:
         errors.append("기획서만 평가하려면 확인 체크박스를 선택해주세요.")
     return errors
